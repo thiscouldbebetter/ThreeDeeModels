@@ -2,6 +2,7 @@ import bpy
 import math
 import mathutils
 
+# Classes.
 class Color:
     def __init__(self, name, componentsRGB):
         self.name = name
@@ -268,11 +269,123 @@ class MeshBuilder:
                 
                 meshesToMerge.append(meshStudDisplaced)
         
-        meshMerged = self.mergeMeshes(meshesToMerge)
+        meshName = "Brick_" + sizeInStuds.toStringXYZ()
+        meshMerged = self.mergeMeshes(meshName, meshesToMerge)
         
         return meshMerged
     
-    def mergeMeshes(self, meshesToMerge):
+    def extrudeFromVertices(self, meshName, verticesBottom):
+    
+        verticesBottomCount = len(verticesBottom)
+        
+        vertices = list(
+            map(
+                lambda x : x.clone(),
+                verticesBottom
+            )
+        )
+        
+        displacementBottomToTop = Coords(0, 0, -1)
+        for i in range(verticesBottomCount):
+            vertexBottom = vertices[i]
+            vertexTop = vertexBottom.clone().add(displacementBottomToTop)
+            vertices.append(vertexTop)
+            
+        faces = []
+        
+        vertexIndicesBottom = []
+        vertexIndicesTop = []
+        for i in range(0, verticesBottomCount):
+            vertexIndexBottom = i
+            vertexIndexTop = i + verticesBottomCount
+            vertexIndicesBottom.append(vertexIndexBottom)
+            vertexIndicesTop.append(vertexIndexTop)
+            
+        faceBottom = MeshFace(vertexIndicesBottom)
+        faceTop = MeshFace(vertexIndicesTop)
+        faces.append(faceBottom)
+        faces.append(faceTop)
+        
+        for vertexBottomIndex in range(verticesBottomCount):
+
+            vertexTopIndex = vertexBottomIndex + verticesBottomCount
+
+            vertexBottomNextIndex = vertexBottomIndex + 1
+            if (vertexBottomNextIndex >= verticesBottomCount):
+                vertexBottomNextIndex = 0
+
+            vertexTopNextIndex = vertexTopIndex + 1
+            if (vertexTopNextIndex >= verticesBottomCount * 2):
+                vertexTopNextIndex = verticesBottomCount
+            
+            faceSide = MeshFace(
+                [
+                    vertexBottomIndex, vertexTopIndex,
+                    vertexTopNextIndex, vertexBottomNextIndex
+                ]
+            )
+            
+            faces.append(faceSide)
+                
+        meshExtruded = Mesh(
+            meshName,
+            vertices,
+            faces
+        )
+        
+        return meshExtruded
+
+    def gear(self, toothCount, radiusInnerOverOuter):
+    
+        radiansPerTurn = 2 * math.pi # "tau"
+        radiansPerPoint = radiansPerTurn / toothCount
+        radiansPerPointHalf = radiansPerPoint / 2
+        
+        vertices = []
+        for i in range(0, toothCount):
+
+            angleInRadians = i * radiansPerPoint
+
+            vertexNearInner = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            ).multiplyScalar(
+                radiusInnerOverOuter
+            )
+            vertices.append(vertexNearInner)
+
+            vertexNearOuter = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            )
+            vertices.append(vertexNearOuter)
+            
+            angleInRadians += radiansPerPointHalf
+
+            vertexFarOuter = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            )
+            vertices.append(vertexFarOuter)
+
+            vertexFarInner = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            ).multiplyScalar(
+                radiusInnerOverOuter
+            )
+            vertices.append(vertexFarInner)
+    
+        meshName = "GearWith" + str(toothCount) + "Teeth"
+        mesh = self.extrudeFromVertices(meshName, vertices)
+                
+        return mesh
+
+    def mergeMeshes(name, self, meshesToMerge):
 
         nameMerged = "Merge_"
         verticesMerged = []
@@ -300,7 +413,6 @@ class MeshBuilder:
         );
 
         return returnMesh
-
     
     def tube(self, sideCount):
     
@@ -313,55 +425,42 @@ class MeshBuilder:
             y = math.cos(angleInRadians)
             vertex = Coords(x, y, 0)
             vertices.append(vertex)
-        
-        displacementBottomToTop = Coords(0, 0, -1)
-        for i in range(sideCount):
-            vertexBottom = vertices[i]
-            vertexTop = vertexBottom.clone().add(displacementBottomToTop)
-            vertices.append(vertexTop)
-            
-        faces = []
-        
-        vertexIndicesBottom = []
-        vertexIndicesTop = []
-        for i in range(0, sideCount):
-            vertexIndexBottom = i
-            vertexIndexTop = i + sideCount
-            vertexIndicesBottom.append(vertexIndexBottom)
-            vertexIndicesTop.append(vertexIndexTop)
-            
-        faceBottom = MeshFace(vertexIndicesBottom)
-        faceTop = MeshFace(vertexIndicesTop)
-        faces.append(faceBottom)
-        faces.append(faceTop)
-        
-        for vertexBottomIndex in range(sideCount):
-
-            vertexTopIndex = vertexBottomIndex + sideCount
-
-            vertexBottomNextIndex = vertexBottomIndex + 1
-            if (vertexBottomNextIndex >= sideCount):
-                vertexBottomNextIndex = 0
-
-            vertexTopNextIndex = vertexTopIndex + 1
-            if (vertexTopNextIndex >= sideCount * 2):
-                vertexTopNextIndex = sideCount            
-            
-            faceSide = MeshFace(
-                [
-                    vertexBottomIndex, vertexTopIndex,
-                    vertexTopNextIndex, vertexBottomNextIndex
-                ]
-            )
-            
-            faces.append(faceSide)
+    
+        meshName = "TubeWith" + str(sideCount) + "Sides"
+        mesh = self.extrudeFromVertices(meshName, vertices)
                 
-        mesh = Mesh(
-            "TubeWith" + str(sideCount) + "Sides",
-            vertices,
-            faces
-        )
+        return mesh
+    
+    def star(self, pointCount, radiusInnerOverOuter):
+    
+        radiansPerTurn = 2 * math.pi # "tau"
+        radiansPerPoint = radiansPerTurn / pointCount
+        radiansPerPointHalf = radiansPerPoint / 2
         
+        vertices = []
+        for i in range(0, pointCount):
+
+            angleInRadians = i * radiansPerPoint
+            vertexInner = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            ).multiplyScalar(
+                radiusInnerOverOuter
+            )
+            vertices.append(vertexInner)
+            
+            angleInRadians += radiansPerPointHalf
+            vertexOuter = Coords(
+                math.cos(angleInRadians),
+                math.sin(angleInRadians),
+                0
+            )
+            vertices.append(vertexOuter)
+    
+        meshName = "StarWith" + str(pointCount) + "Points"
+        mesh = self.extrudeFromVertices(meshName, vertices)
+                
         return mesh
                            
 
@@ -488,7 +587,7 @@ class Orientation:
     
     def toString():
         return ("Fd:" + self.forward.toStringXYZ() + ", Dn:" + self.down.toStringXYZ() )
-
+    
     
 class Orientation_Instances:
     def __init__(self):
@@ -559,7 +658,10 @@ class Transform_Scale:
     def transformCoords(self, coordsToTransform):
         coordsToTransform.multiply(self.scaleFactors)
         return coordsToTransform
-            
+
+
+# Main.
+        
 def main():
     
     print("Script begins.")
@@ -606,34 +708,55 @@ def main():
     brick2x4Yellow = MeshWithMaterial(meshBrick2x4, materialYellow)
 
     brick2x4 = brick2x4GrayLight
+
+    meshGear24 = meshBuilder.gear(24, 0.9).transform(
+        Transform_Scale(
+            Coords(2, 2, .25)
+        )
+    )
+    gear24 = MeshWithMaterial(meshGear24, materialGrayLight)
+    
+    meshAxle8 = meshBuilder.star(4, 0.5).transform(
+        Transform_Scale(
+            Coords(.5, .5, 8)
+        )
+    )
+    axle8 = MeshWithMaterial(meshAxle8, materialGrayDark)
             
     oris = Orientation.Instances()
     # hack - The axes are wrong here.
-    east = oris.ForwardXDownZ
-    north = oris.ForwardYDownZ
-    west = oris.ForwardXNegativeDownZ
-    south = oris.ForwardYNegativeDownZ
-    
+    # "e" = east, "n" = north, "w" = west, "s" = south.
+    e = oris.ForwardXDownZ
+    n = oris.ForwardYDownZ
+    w = oris.ForwardXNegativeDownZ
+    s = oris.ForwardYNegativeDownZ
+        
+    # Convenience method to cut down on typing.
+    def md(mesh, x, y, z, orientation):
+        return MeshDisposition(mesh, Disposition(Coords(x, y, z), orientation))
+            
     meshDispositions = [
 
         # Tier 1.
-        MeshDisposition(brick2x4Red, Disposition(Coords(0, 0, 0), east)),
-        MeshDisposition(brick2x4Orange, Disposition(Coords(4, 2, 0), north)),
-        MeshDisposition(brick2x4Yellow, Disposition(Coords(6, -2, 0), west)),
-        MeshDisposition(brick2x4Green, Disposition(Coords(2, -4, 0), south)),        
+        md(brick2x4Red, 0, 0, 0, e),
+        md(brick2x4Orange, 4, 2, 0, n),
+        md(brick2x4Yellow, 6, -2, 0, w),
+        md(brick2x4Green, 2, -4, 0, s),
 
         # Tier 2.
-        MeshDisposition(brick2x4Cyan, Disposition(Coords(2, 0, 1), east)),
-        MeshDisposition(brick2x4Blue, Disposition(Coords(4, 0, 1), north)),
-        MeshDisposition(brick2x4Violet, Disposition(Coords(4, -2, 1), west)),
-        MeshDisposition(brick2x4Black, Disposition(Coords(2, -2, 1), south)),        
+        md(brick2x4Cyan, 2, 0, 1, e),
+        md(brick2x4Blue, 4, 0, 1, n),
+        md(brick2x4Violet, 4, -2, 1, w),
+        md(brick2x4Black, 2, -2, 1, s),
 
         # Tier 3.
-        MeshDisposition(brick2x4GrayLight, Disposition(Coords(0, 0, 2), east)),
-        MeshDisposition(brick2x4GrayDark, Disposition(Coords(4, 2, 2), north)),
-        MeshDisposition(brick2x4White, Disposition(Coords(6, -2, 2), west)),
-        MeshDisposition(brick2x4, Disposition(Coords(2, -4, 2), south)),        
-
+        md(brick2x4GrayLight, 0, 0, 2, e),
+        md(brick2x4GrayDark, 4, 2, 2, n),
+        md(brick2x4White, 6, -2, 2, w),
+        md(brick2x4, 2, -4, 2, s),
+        
+        md(axle8, 3, -1, 10, e),
+        md(gear24, 3, -1, 9, e),
     ]
     
     scene = Scene(meshDispositions)
